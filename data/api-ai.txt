@@ -1,0 +1,17 @@
+i want to go to boston :  Wrong : Boston as departure city
+i want to go to london from austin :  Wrong: from:Austin, did not get destination. 
+i want to go to maldives on july 2nd. : Got destination maldives as a country, and departure date 7/2/2017 : Correct
+i want to go to london,england from austin,texas. : from Austin, did not get destination: Wrong
+i want to leave austin on the 2nd of july for las vegas. I want to be back on july 14th. : did not get dates correctly, could not get return date, destination incorrectly identified as austin. : Wrong
+I want  to buy tickets for 4 people  from Austin to London in july. I want accommodation for 4 nights. I will leave on july 1  and come back on 7/18.
+: Correct 4 tickets, from and to : Wrong dates
+I want to go to boston on 7/14. : Correct
+i want to leave on 1st of july. : Correct
+Book a cruise for two in the french riviera. : Correct number of tickets. No destination identified
+I would like to go to boston on july 4th for 10 days. : Correct destination, Wrong: did not identify date
+I want to buy 4 tickets to london leaving 4.1 and returning 4.12.2017  .Correct: number of tickets, destination. Wrong: date year was 2018
+I want to fly to san francisco on 7-4. I will be back in Austin on 7/10. Correct: Departure date and destination, Wrong : did not identify return date or departure city (2nd sentence not considered ?)
+I will come back to austin on 7/12 after flying to boston on 7/4. Correct : destination, Wrong: departure date (picked the return date of 7/12), did not identify return date or departure city
+I will leave for boston on 7/5 and return on 7/25/2017.: Correct : Dates, destination, Wrong: number of tickets = 2017
+
+

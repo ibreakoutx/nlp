@@ -1,0 +1,35 @@
+{
+  "entities": [
+    {
+      "name": "vacation",
+      "type": "EVENT",
+      "metadata": {},
+      "salience": 0.58063745,
+      "mentions": [
+        {
+          "text": {
+            "content": "vacation",
+            "beginOffset": 10
+          },
+          "type": "COMMON"
+        }
+      ]
+    },
+    {
+      "name": "cancun",
+      "type": "LOCATION",
+      "metadata": {},
+      "salience": 0.41936252,
+      "mentions": [
+        {
+          "text": {
+            "content": "cancun",
+            "beginOffset": 22
+          },
+          "type": "COMMON"
+        }
+      ]
+    }
+  ],
+  "language": "en"
+}
