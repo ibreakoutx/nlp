@@ -1,4 +1,12 @@
+/*
+Take in nlpraw, entity and syntax json
+Produce source, destination, num travellers, etc
+*/
 var _ = require('underscore');
+
+//------------------------------------
+//Easy way to read in json files
+//------------------------------------
 var nlpraw = require("./nlpraw.json");
 var entity = require("./entity.json");
 var syntax = require("./syntax.json");
@@ -6,7 +14,8 @@ var syntax = require("./syntax.json");
 //Result dictionary
 var RESULT = {};
 
-//Word keys
+//------------------------------------------------------------------------------
+//Word keys, store synonyms
 //------------------------------------------------------------------------------
 var destinationkeys = ['to','for'];
 var originkeys = ['from'];
@@ -18,32 +27,200 @@ var datekeys = {
   'return':['return','come', 'come back', 'be','be back','back','reenter']
 };
 
+//Month synonyms
 var monthkeys = [ 'jan' , 'january' , 'feb', 'february', 'mar', 'march',
   'apr','april','may','jun','june','july','jul','aug','august','sep',
   'september','oct','october','nov','november','dec','december'
 ];
+
 //month idx corresponding to monthkeys entries above
 var monthidx = [ 1 , 1 , 2, 2, 3, 3,
    4 , 4 , 5 , 6 , 6 , 7 , 7 , 8 , 8 , 9 ,
    9 , 10 , 10 , 11 , 11 , 12 , 12
 ];
 
+//Quantity synonyms
 var quantitykeys = ['buy','ticket','person'];
+
+//Duration synonyms
 var durationkeys = ['night','day','week','month','year','fortnight'];
 //------------------------------------------------------------------------------
 
+/*
+Format of entity.json
+{
+  "entities": [
+    {
+      "name": "tickets",
+      "type": "OTHER",
+      "metadata": {},
+      "salience": 0.4612802,
+      "mentions": [
+        {
+          "text": {
+            "content": "tickets",
+            "beginOffset": 15
+          },
+          "type": "COMMON"
+        }
+      ]
+    },
+    {
+      "name": "people",
+      "type": "PERSON",
+      "metadata": {},
+      "salience": 0.1781294,
+      "mentions": [
+        {
+          "text": {
+            "content": "people",
+            "beginOffset": 29
+          },
+          "type": "COMMON"
+        }
+      ]
+    },
+    {
+      "name": "austin",
+      "type": "OTHER",
+      "metadata": {},
+      "salience": 0.1781294,
+      "mentions": [
+        {
+          "text": {
+            "content": "austin",
+            "beginOffset": 42
+          },
+          "type": "COMMON"
+        }
+      ]
+    },
+    {
+      "name": "london",
+      "type": "LOCATION",
+      "metadata": {},
+      "salience": 0.12201704,
+      "mentions": [
+        {
+          "text": {
+            "content": "london",
+            "beginOffset": 52
+          },
+          "type": "COMMON"
+        }
+      ]
+    }
+  ],
+  "language": "en"
+}
+*/
+
+//All entities regardless of type
 var entitylist = entity['entities'];
 console.log('ENTITIES :' + _.pluck(entitylist, 'name'));
 
+//Entities with type of location, this is to give us a hint on
+//source and destination
+//In example above, 'austin' is recognized as an entity but not
+//of type 'location'
 var locations = _.where(entitylist, {'type':'LOCATION'});
 console.log('LOCATIONS :' + JSON.stringify(locations));
 
+/*
+Syntax tree
+{
+  "sentences": [
+    {
+      "text": {
+        "content": "i want  to buy tickets for 4 people  from austin to london in july.",
+        "beginOffset": 0
+      }
+  ],
+  "tokens": [
+    {
+      "text": {
+        "content": "i",
+        "beginOffset": 0
+      },
+      "partOfSpeech": {
+        "tag": "PRON",
+        "aspect": "ASPECT_UNKNOWN",
+        "case": "NOMINATIVE",
+        "form": "FORM_UNKNOWN",
+        "gender": "GENDER_UNKNOWN",
+        "mood": "MOOD_UNKNOWN",
+        "number": "SINGULAR",
+        "person": "FIRST",
+        "proper": "PROPER_UNKNOWN",
+        "reciprocity": "RECIPROCITY_UNKNOWN",
+        "tense": "TENSE_UNKNOWN",
+        "voice": "VOICE_UNKNOWN"
+      },
+      "dependencyEdge": {
+        "headTokenIndex": 1,
+        "label": "NSUBJ"
+      },
+      {
+        "text": {
+          "content": "want",
+          "beginOffset": 2
+        },
+        "partOfSpeech": {
+          "tag": "VERB",
+          "aspect": "ASPECT_UNKNOWN",
+          "case": "CASE_UNKNOWN",
+          "form": "FORM_UNKNOWN",
+          "gender": "GENDER_UNKNOWN",
+          "mood": "INDICATIVE",
+          "number": "NUMBER_UNKNOWN",
+          "person": "PERSON_UNKNOWN",
+          "proper": "PROPER_UNKNOWN",
+          "reciprocity": "RECIPROCITY_UNKNOWN",
+          "tense": "PRESENT",
+          "voice": "VOICE_UNKNOWN"
+        },
+        "dependencyEdge": {
+          "headTokenIndex": 1,
+          "label": "ROOT"
+        },
+        "lemma": "want"
+      },
+      {
+        "text": {
+          "content": "buy",
+          "beginOffset": 11
+        },
+        "partOfSpeech": {
+          "tag": "VERB",
+          "aspect": "ASPECT_UNKNOWN",
+          "case": "CASE_UNKNOWN",
+          "form": "FORM_UNKNOWN",
+          "gender": "GENDER_UNKNOWN",
+          "mood": "MOOD_UNKNOWN",
+          "number": "NUMBER_UNKNOWN",
+          "person": "PERSON_UNKNOWN",
+          "proper": "PROPER_UNKNOWN",
+          "reciprocity": "RECIPROCITY_UNKNOWN",
+          "tense": "TENSE_UNKNOWN",
+          "voice": "VOICE_UNKNOWN"
+        },
+        "dependencyEdge": {
+          "headTokenIndex": 1,
+          "label": "XCOMP"
+        },
+        "lemma": "buy"
+      },
+
+*/
+
+//Extract all token objects
 var tokenlist = syntax['tokens'];
 
 //Flatten structure for easier data retrievel
 //Move up some of these f**** nested properties
 //so underscore has an easier time
 tokenlist.forEach( (tk,idx) => {
+
   //actual word
   tk['word'] = tk['text']['content'];
 
@@ -61,14 +238,16 @@ tokenlist.forEach( (tk,idx) => {
 
   //position in raw string
   tk['posn'] = tk['text']['beginOffset'];
+
 });
 
+//For each word store its parent (lemmatized)
 tokenlist.forEach( (tk) => {
   //parent word
   tk['parent'] = tokenlist[tk['pidx']]['lemma'];
 });
 
-//Find all children
+//Find all children for each node
 tokenlist.forEach( (p) => {
   var children = [];
   var childrenidx = [];
@@ -94,22 +273,75 @@ console.log( 'NOUNS :' + _.pluck(nouns,'lemma'));
 
 //Find numbers
 var nums = _.where(tokenlist,{'tag':'NUM'});
+
 //List of number positions
 var numposnlist = _.pluck(nums,'posn');
-
 console.log( 'Numbers :' + _.pluck(nums,'lemma'));
 
+//Find list of locations
 var locationNames = _.pluck(locations,'name');
 
+//Find source and destination
+//Find parent of location names, if parent is one of the destinationkeys then we
+//have found the destination.
+var locationsFound = [];
 locations.forEach( (loc) => {
   console.log('loc[name] :' + loc['name']);
+
   var parentofloc = getLocationParent(loc['name']);
   console.log( "Locations :" + loc['name'] + ' : ' + parentofloc ) ;
 
   //Store result of determining from and to locations
-  if ( arrayFind(destinationkeys, parentofloc) ) RESULT['to'] = loc['name'];
-  if ( arrayFind(originkeys, parentofloc) ) RESULT['from'] = loc['name'];
+  if ( arrayFind(destinationkeys, parentofloc) ) {
+    RESULT['to'] = loc['name'];
+    locationsFound.push(loc['name']);
+  }
+
+  if ( arrayFind(originkeys, parentofloc) ) {
+    RESULT['from'] = loc['name'];
+    locationsFound.push(loc['name']);
+  }
 });
+
+
+//If to and from locations not found, expand search to include all entities.
+entitylist.forEach( (entity) => {
+
+  //Only look at entities not in locationFound array
+  if ( locationsFound.indexOf(entity['name']) == -1) {
+
+    //Get parent
+    var parentofloc = getLocationParent(entity['name']);
+
+    if ( RESULT['to'] == undefined ) {
+      if ( arrayFind(destinationkeys, parentofloc) ) {
+        RESULT['to'] = entity['name'];
+      }
+    }
+
+    if ( RESULT['from'] == undefined ) {
+      if ( arrayFind(originkeys, parentofloc) ) {
+        RESULT['from'] = entity['name'];
+      }
+    }
+
+  }
+
+});
+
+//Find parent that returns true for function passed
+function findParentMatch(name, fn, arg) {
+  var parentofloc = getLocationParent(name);
+
+  if ( parentofloc == undefined )
+    return false ;
+  else {
+        if ( fn(arg,parentofloc) )
+          return true;
+        else
+          findParentMatch(parentofloc,fn,arg);
+    }
+}
 
 function getLocationParent(name) {
     var tk = _.find(tokenlist,(t) => { return t['lemma'] == name ;});
