@@ -4,6 +4,8 @@ Produce source, destination, num travellers, etc
 */
 var _ = require('underscore');
 
+
+
 //------------------------------------
 //Easy way to read in json files
 //------------------------------------
@@ -18,7 +20,7 @@ var RESULT = {};
 //Word keys, store synonyms
 //------------------------------------------------------------------------------
 var destinationkeys = ['to','for'];
-var originkeys = ['from'];
+var originkeys = ['from','back'];
 var datekeys = {
   'depart': ['depart','leave','fly','fly out','go','go out','step out','start',
               'start out','get away','go away','hit the road','arrive', 'travel',
@@ -243,8 +245,14 @@ tokenlist.forEach( (tk,idx) => {
 
 //For each word store its parent (lemmatized)
 tokenlist.forEach( (tk) => {
-  //parent word
-  tk['parent'] = tokenlist[tk['pidx']]['lemma'];
+  //For the root word index and parent index will
+  //be the same, set parent as undefined then
+  //Needed for recursive call definitions to terminate
+  if ( tk['idx'] == tk['pidx'] )
+    tk['parent'] = undefined;
+  else
+    //parent word
+    tk['parent'] = tokenlist[tk['pidx']]['lemma'];
 });
 
 //Find all children for each node
@@ -278,69 +286,65 @@ var nums = _.where(tokenlist,{'tag':'NUM'});
 var numposnlist = _.pluck(nums,'posn');
 console.log( 'Numbers :' + _.pluck(nums,'lemma'));
 
-//Find list of locations
-var locationNames = _.pluck(locations,'name');
-
 //Find source and destination
 //Find parent of location names, if parent is one of the destinationkeys then we
 //have found the destination.
 var locationsFound = [];
-locations.forEach( (loc) => {
-  console.log('loc[name] :' + loc['name']);
+function findSourceDestination(list) {
+  list.forEach( (loc) => {
+    console.log('loc[name] :' + loc['name']);
+    var name = loc['name'];
 
-  var parentofloc = getLocationParent(loc['name']);
-  console.log( "Locations :" + loc['name'] + ' : ' + parentofloc ) ;
+      //Find list of locations, these can correspond to multiple tokens
+      //like san francisco, los angeles etc.
+      //In these cases tracing back from the root will not work.
+      //So split entity/location name on 1 or more spaces , using regex \s+
+      if ( name.split(/\s+/).length > 1 )
+        name = name.split(/\s+/)[0];
 
-  //Store result of determining from and to locations
-  if ( arrayFind(destinationkeys, parentofloc) ) {
-    RESULT['to'] = loc['name'];
-    locationsFound.push(loc['name']);
-  }
-
-  if ( arrayFind(originkeys, parentofloc) ) {
-    RESULT['from'] = loc['name'];
-    locationsFound.push(loc['name']);
-  }
-});
-
-
-//If to and from locations not found, expand search to include all entities.
-entitylist.forEach( (entity) => {
-
-  //Only look at entities not in locationFound array
-  if ( locationsFound.indexOf(entity['name']) == -1) {
-
-    //Get parent
-    var parentofloc = getLocationParent(entity['name']);
-
-    if ( RESULT['to'] == undefined ) {
-      if ( arrayFind(destinationkeys, parentofloc) ) {
-        RESULT['to'] = entity['name'];
+      //Only visit locations not already classified as source or destination
+      if ( locationsFound.indexOf(loc['name']) == -1 && RESULT['to'] == undefined ) {
+        if( findParentMatch( name, arrayFind, destinationkeys ) ) {
+          RESULT['to'] = loc['name'];
+          console.log('RESULT[to]: ' + RESULT['to']);
+          locationsFound.push(loc['name']);
+        }
       }
-    }
 
-    if ( RESULT['from'] == undefined ) {
-      if ( arrayFind(originkeys, parentofloc) ) {
-        RESULT['from'] = entity['name'];
+      if ( locationsFound.indexOf(loc['name']) == -1 && RESULT['from'] == undefined ) {
+        if( findParentMatch( name, arrayFind, originkeys ) ) {
+          RESULT['from'] = loc['name'];
+          console.log('RESULT[from]: ' + RESULT['from']);
+          locationsFound.push(loc['name']);
+        }
       }
-    }
+  });
+}
 
-  }
+//Associate locations from source and destination
+findSourceDestination(locations)
 
-});
+//If either source or destination not set
+if ( !(RESULT['to'] && RESULT['from']) )
+  findSourceDestination(entitylist);
+
+console.log('locationsFound: ' + locationsFound);
 
 //Find parent that returns true for function passed
 function findParentMatch(name, fn, arg) {
+  var rval ;
+  console.log('findParentMatch :' + name + ' arg:' + arg) ;
   var parentofloc = getLocationParent(name);
 
   if ( parentofloc == undefined )
-    return false ;
+    rval=false ;
   else {
         if ( fn(arg,parentofloc) )
-          return true;
+          rval = true;
         else
-          findParentMatch(parentofloc,fn,arg);
+          rval = findParentMatch(parentofloc,fn,arg);
     }
+    return rval;
 }
 
 function getLocationParent(name) {
@@ -410,6 +414,10 @@ datetokens.forEach( (tk,idx) => {
 });
 
 function findDatesRoot(tk,date) {
+  if (tk['parent'] == undefined) {
+      console.log('findDatesRoot no match found');
+      return 1;
+  }
   //console.log('findRoot: ' + tk['lemma'].indexOf(tk['parent']));
   if(tk['lemma'].indexOf(tk['parent']) != -1) {
   //if ( tk['lemma]'] == tk['parent'] ) { //doesn't work
@@ -522,66 +530,84 @@ console.log(">-------------------------<");
 //------------------------------------------------------------------------------
 //Match up numbers to other keywords
 function findRoot(tk,keys) {
-  //console.log('findRoot: ' + tk['lemma'].indexOf(tk['parent']));
-  if(tk['lemma'].indexOf(tk['parent']) != -1) {
-  //if ( tk['lemma]'] == tk['parent'] ) { //doesn't work
+  if (tk['parent'] == undefined) {
     console.log('findRoot no match found');
-    return -1;
+    return [-1];
   }
   else {
-    console.log(tk['lemma'] + '--->' + tk['parent']);
-    var rval = _.indexOf(keys, tk['parent']);
-    console.log('rval :' + rval);
-    if (rval != -1) {
-      return tk['lemma'];
+    //console.log('findRoot: ' + tk['lemma'].indexOf(tk['parent']));
+    if(tk['lemma'].indexOf(tk['parent']) != -1) {
+    //if ( tk['lemma]'] == tk['parent'] ) { //doesn't work
+      console.log('findRoot no match found');
+      return -1;
     }
     else {
-      return findRoot(tokenlist[tk['pidx']],keys);
+      console.log(tk['lemma'] + '--->' + tk['parent']);
+      var rval = _.indexOf(keys, tk['parent']);
+      console.log('rval :' + rval);
+      if (rval != -1) {
+        return tk['lemma'];
+      }
+      else {
+        return findRoot(tokenlist[tk['pidx']],keys);
+      }
     }
   }
 }
 
 //Process 1st of july , the 'of' throws the 1 july and july 1 stuff off
 function findRootNum(tk,date) {
-  //console.log('findRoot: ' + tk['lemma'].indexOf(tk['parent']));
-  if(tk['lemma'].indexOf(tk['parent']) != -1) {
-  //if ( tk['lemma]'] == tk['parent'] ) { //doesn't work
+  if (tk['parent'] == undefined) {
     console.log('findRootNum no match found');
     return [-1];
   }
   else {
-    //See if parent is a number
-    var mval = tk['parent'].match(/\b[0-9]+\b/);
-    if ( mval == null ) {
-      //No match, so go another level down
-      return findRootNum(tokenlist[tk['pidx']],date);
+    //console.log('findRoot: ' + tk['lemma'].indexOf(tk['parent']));
+    if(tk['lemma'].indexOf(tk['parent']) != -1) {
+    //if ( tk['lemma]'] == tk['parent'] ) { //doesn't work
+      console.log('findRootNum no match found');
+      return [-1];
     }
     else {
-      date = date + tk['parent'];
-      return [1,date,tokenlist[tk['pidx']]];
+      //See if parent is a number
+      var mval = tk['parent'].match(/\b[0-9]+\b/);
+      if ( mval == null ) {
+        //No match, so go another level down
+        return findRootNum(tokenlist[tk['pidx']],date);
+      }
+      else {
+        date = date + tk['parent'];
+        return [1,date,tokenlist[tk['pidx']]];
+      }
     }
-  }//else
+  }
 }
 
 function findRootMonth(tk) {
-  //console.log('findRoot: ' + tk['lemma'].indexOf(tk['parent']));
-  if(tk['lemma'].indexOf(tk['parent']) != -1) {
-  //if ( tk['lemma]'] == tk['parent'] ) { //doesn't work
-    console.log('findRoot no match found');
-    return -1;
+  if (tk['parent'] == undefined) {
+    console.log('findRootMonth no match found');
+    return [-1];
   }
   else {
-    var idx = _.indexOf(monthkeys,tk['parent']);
-    //Process date of the form 1 july or july 1
-    if (idx != -1) {
-      var month = monthidx[idx];
-      var date = month + '/' + tk['lemma']  ;
-      findDatesRoot( tokenlist[tk['pidx']] , date);
-      return 1;
+    //console.log('findRoot: ' + tk['lemma'].indexOf(tk['parent']));
+    if(tk['lemma'].indexOf(tk['parent']) != -1) {
+    //if ( tk['lemma]'] == tk['parent'] ) { //doesn't work
+      console.log('findRoot no match found');
+      return -1;
     }
-  }//else
+    else {
+      var idx = _.indexOf(monthkeys,tk['parent']);
+      //Process date of the form 1 july or july 1
+      if (idx != -1) {
+        var month = monthidx[idx];
+        var date = month + '/' + tk['lemma']  ;
+        findDatesRoot( tokenlist[tk['pidx']] , date);
+        return 1;
+      }
+    }//else
+  }
 }
 
-function arrayFind( array, item ) {
+function arrayFind ( array, item ) {
   return _.indexOf(array,item) != -1 ;
 }
