@@ -20,7 +20,7 @@ var RESULT = {};
 //Word keys, store synonyms
 //------------------------------------------------------------------------------
 var destinationkeys = ['to','for'];
-var originkeys = ['from','back'];
+var originkeys = ['from','back','return'];
 var datekeys = {
   'depart': ['depart','leave','fly','fly out','go','go out','step out','start',
               'start out','get away','go away','hit the road','arrive', 'travel',
@@ -118,15 +118,8 @@ Format of entity.json
 */
 
 //All entities regardless of type
-var entitylist = entity['entities'];
-console.log('ENTITIES :' + _.pluck(entitylist, 'name'));
-
-//Entities with type of location, this is to give us a hint on
-//source and destination
-//In example above, 'austin' is recognized as an entity but not
-//of type 'location'
-var locations = _.where(entitylist, {'type':'LOCATION'});
-console.log('LOCATIONS :' + JSON.stringify(locations));
+var rawEntityList = entity['entities'];
+console.log('ENTITIES :' + _.pluck(rawEntityList, 'name'));
 
 /*
 Syntax tree
@@ -216,12 +209,12 @@ Syntax tree
 */
 
 //Extract all token objects
-var tokenlist = syntax['tokens'];
+var TOKENS = syntax['tokens'];
 
 //Flatten structure for easier data retrievel
 //Move up some of these f**** nested properties
 //so underscore has an easier time
-tokenlist.forEach( (tk,idx) => {
+TOKENS.forEach( (tk,idx) => {
 
   //actual word
   tk['word'] = tk['text']['content'];
@@ -243,8 +236,39 @@ tokenlist.forEach( (tk,idx) => {
 
 });
 
+//Flatten the entity datastructure, need beginOffset to map
+//to token index
+var ENTITIES = [];
+rawEntityList.forEach( (entity,idx) => {
+  var mentions = entity['mentions'];
+  mentions.forEach( (mention) => {
+    var obj = {};
+    obj['name'] = entity['name'];
+    obj['type'] = entity['type'];
+    obj['posn'] = mention["text"]["beginOffset"];
+    obj['innertype'] = mention['type'];
+    obj['salience'] = entity['salience'];
+
+    //TODO: see if underscore equivalent to find
+    //an element in a list
+    TOKENS.forEach( (tk,tidx) => {
+      if ( tk['posn'] == obj['posn'] ) {
+        obj['tidx'] = tidx ;
+      }
+    });
+
+    ENTITIES.push(obj);
+  });
+});
+
+console.log('Entity list : ' + JSON.stringify(ENTITIES));
+
 //For each word store its parent (lemmatized)
-tokenlist.forEach( (tk) => {
+//TODO: Traversing the tree with the parent name can
+//result in a wrong tree traversal, for example there might
+//be a word like 'to' repeated multiple times. So we might
+//pick the wrong 'to' and proceed incorrectly.
+TOKENS.forEach( (tk) => {
   //For the root word index and parent index will
   //be the same, set parent as undefined then
   //Needed for recursive call definitions to terminate
@@ -252,17 +276,17 @@ tokenlist.forEach( (tk) => {
     tk['parent'] = undefined;
   else
     //parent word
-    tk['parent'] = tokenlist[tk['pidx']]['lemma'];
+    tk['parent'] = TOKENS[tk['pidx']]['lemma'];
 });
 
 //Find all children for each node
-tokenlist.forEach( (p) => {
+TOKENS.forEach( (p) => {
   var children = [];
   var childrenidx = [];
   var childrenposn = [];
 
   var name = p['lemma'];
-  tokenlist.forEach( (c,i) => {
+  TOKENS.forEach( (c,i) => {
     if (c['parent'] == name ) {
       children.push(c['lemma']);
       childrenidx.push(i);
@@ -275,12 +299,20 @@ tokenlist.forEach( (p) => {
   p['childrenposn'] = childrenposn;
 });
 
+
+//Entities with type of location, this is to give us a hint on
+//source and destination
+//In example above, 'austin' is recognized as an entity but not
+//of type 'location'
+var locations = _.where(ENTITIES, {'type':'LOCATION'});
+console.log('LOCATIONS :' + JSON.stringify(locations));
+
 //Find nouns
-var nouns = _.where(tokenlist, {'tag':'NOUN'});
+var nouns = _.where(TOKENS, {'tag':'NOUN'});
 console.log( 'NOUNS :' + _.pluck(nouns,'lemma'));
 
 //Find numbers
-var nums = _.where(tokenlist,{'tag':'NUM'});
+var nums = _.where(TOKENS,{'tag':'NUM'});
 
 //List of number positions
 var numposnlist = _.pluck(nums,'posn');
@@ -304,7 +336,7 @@ function findSourceDestination(list) {
 
       //Only visit locations not already classified as source or destination
       if ( locationsFound.indexOf(loc['name']) == -1 && RESULT['to'] == undefined ) {
-        if( findParentMatch( name, arrayFind, destinationkeys ) ) {
+        if( findParentMatchByIndex( loc['tidx'], arrayFind, destinationkeys ) ) {
           RESULT['to'] = loc['name'];
           console.log('RESULT[to]: ' + RESULT['to']);
           locationsFound.push(loc['name']);
@@ -312,7 +344,7 @@ function findSourceDestination(list) {
       }
 
       if ( locationsFound.indexOf(loc['name']) == -1 && RESULT['from'] == undefined ) {
-        if( findParentMatch( name, arrayFind, originkeys ) ) {
+        if( findParentMatchByIndex( loc['tidx'], arrayFind, originkeys ) ) {
           RESULT['from'] = loc['name'];
           console.log('RESULT[from]: ' + RESULT['from']);
           locationsFound.push(loc['name']);
@@ -326,30 +358,41 @@ findSourceDestination(locations)
 
 //If either source or destination not set
 if ( !(RESULT['to'] && RESULT['from']) )
-  findSourceDestination(entitylist);
+  findSourceDestination(ENTITIES);
 
 console.log('locationsFound: ' + locationsFound);
 
-//Find parent that returns true for function passed
-function findParentMatch(name, fn, arg) {
+//Find parent index that returns true for function passed
+function findParentMatchByIndex(idx, fn, arg) {
   var rval ;
-  console.log('findParentMatch :' + name + ' arg:' + arg) ;
-  var parentofloc = getLocationParent(name);
+  console.log('findParentMatchByIndex :' + TOKENS[idx]['word'] + ' arg:' + arg) ;
+  var parentIdx = getParentByIndex(idx);
 
-  if ( parentofloc == undefined )
+  if ( parentIdx == undefined )
     rval=false ;
   else {
-        if ( fn(arg,parentofloc) )
+        if ( fn(arg,TOKENS[parentIdx]['lemma']) )
           rval = true;
         else
-          rval = findParentMatch(parentofloc,fn,arg);
+          rval = findParentMatchByIndex(parentIdx,fn,arg);
     }
     return rval;
 }
 
-function getLocationParent(name) {
-    var tk = _.find(tokenlist,(t) => { return t['lemma'] == name ;});
-    //return tokenlist[tk['pidx']]['word'] ;
+//Return idx of parent
+//If root node, return undefined.
+//In TOKENS array, ROOT will have idx == parent index
+function getParentByIndex(idx) {
+    var pidx = TOKENS[idx]['pidx'];
+    if (pidx == idx)
+      return undefined;
+    else
+      return pidx;
+}
+
+function getParentByName(name) {
+    var tk = _.find(TOKENS,(t) => { return t['lemma'] == name ;});
+
     if ( tk != undefined )
       return tk['parent'];
     else {
@@ -361,7 +404,7 @@ function getLocationParent(name) {
 console.log('<---------------------------------------------->');
 console.log('<--------- Parent Relationships --------------->');
 console.log('<---------------------------------------------->');
-tokenlist.forEach( (tk) => {
+TOKENS.forEach( (tk) => {
   console.log( tk['lemma'] + ' --> ' + tk['parent'] + '\n');
 });
 
@@ -369,7 +412,7 @@ tokenlist.forEach( (tk) => {
 console.log('<---------------------------------------------->');
 console.log('<--------- Child Relationships ---------------->');
 console.log('<---------------------------------------------->');
-tokenlist.forEach( (tk) => {
+TOKENS.forEach( (tk) => {
   console.log( tk['lemma'] + ' <-- ' + tk['children'] + '\n');
 });
 console.log('<--------------------------------------------->');
@@ -401,7 +444,7 @@ console.log('datepositions :' + datepositions);
 
 var datetokens = [];
 datepositions.forEach( (posn) => {
-  datetokens.push( _.find(tokenlist,{'posn':posn}));
+  datetokens.push( _.find(TOKENS,{'posn':posn}));
 });
 console.log(datetokens);
 console.log(dates);
@@ -436,7 +479,7 @@ function findDatesRoot(tk,date) {
       return 1 ;
     }
 
-    if (isdep == -1 && isret == -1) findDatesRoot(tokenlist[tk['pidx']],date);
+    if (isdep == -1 && isret == -1) findDatesRoot(TOKENS[tk['pidx']],date);
   }//else
 }
 
@@ -464,7 +507,7 @@ var quantity = -1;
 //Process remaining Numbers
 numposnlist.forEach( (posn) => {
   var rval;
-  var tk = _.where(tokenlist,{'posn':posn})[0];
+  var tk = _.where(TOKENS,{'posn':posn})[0];
   console.log('num :' + tk['lemma']);
 
   //Process date of the form july 1st or 1st july
@@ -494,7 +537,7 @@ nouns.forEach( (noun) => {
 //Process remaining Numbers
 numposnlist.forEach( (posn) => {
   var rval;
-  var tk = _.where(tokenlist,{'posn':posn})[0];
+  var tk = _.where(TOKENS,{'posn':posn})[0];
   console.log('num :' + tk['lemma']);
 
   //Match above failed, try to see if number refers to
@@ -549,7 +592,7 @@ function findRoot(tk,keys) {
         return tk['lemma'];
       }
       else {
-        return findRoot(tokenlist[tk['pidx']],keys);
+        return findRoot(TOKENS[tk['pidx']],keys);
       }
     }
   }
@@ -573,11 +616,11 @@ function findRootNum(tk,date) {
       var mval = tk['parent'].match(/\b[0-9]+\b/);
       if ( mval == null ) {
         //No match, so go another level down
-        return findRootNum(tokenlist[tk['pidx']],date);
+        return findRootNum(TOKENS[tk['pidx']],date);
       }
       else {
         date = date + tk['parent'];
-        return [1,date,tokenlist[tk['pidx']]];
+        return [1,date,TOKENS[tk['pidx']]];
       }
     }
   }
@@ -601,7 +644,7 @@ function findRootMonth(tk) {
       if (idx != -1) {
         var month = monthidx[idx];
         var date = month + '/' + tk['lemma']  ;
-        findDatesRoot( tokenlist[tk['pidx']] , date);
+        findDatesRoot( TOKENS[tk['pidx']] , date);
         return 1;
       }
     }//else
