@@ -354,7 +354,7 @@ function findSourceDestination(list) {
 }
 
 //Associate locations from source and destination
-findSourceDestination(locations)
+findSourceDestination(locations);
 
 //If either source or destination not set
 if ( !(RESULT['to'] && RESULT['from']) )
